@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Sant Martí — Mapa</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body, #map { margin: 0; padding: 0; height: 100%; width: 100%; }
+    .pin {
+      background: #E8734A;
+      width: 28px; height: 28px;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      border: 2px solid white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const parseList = (k) => (params.get(k) || '').split('|').filter(Boolean);
+
+    const ids       = parseList('ids');
+    const names     = parseList('names');
+    const addresses = parseList('addresses');
+    const lats      = parseList('lats').map(Number);
+    const lngs      = parseList('lngs').map(Number);
+
+    const center = [41.4066, 2.1993];
+    const map = L.map('map').setView(center, 15);
+
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 19
+    }).addTo(map);
+
+    const pinIcon = L.divIcon({
+      className: '',
+      html: '<div class="pin"></div>',
+      iconSize: [28, 28],
+      iconAnchor: [14, 28]
+    });
+
+    const bounds = [];
+    for (let i = 0; i < lats.length; i++) {
+      if (isNaN(lats[i]) || isNaN(lngs[i])) continue;
+      const m = L.marker([lats[i], lngs[i]], { icon: pinIcon }).addTo(map);
+      const name = names[i] || '';
+      const addr = addresses[i] || '';
+      const id   = ids[i]   || '';
+      m.bindPopup(`<b>${name}</b><br>${addr}`);
+      m.on('click', () => {
+        if (window.flutter_inappwebview) {
+          window.flutter_inappwebview.callHandler('onMarkerTap', id);
+        } else if (window.FlutterChannel) {
+          window.FlutterChannel.postMessage(id);
+        }
+      });
+      bounds.push([lats[i], lngs[i]]);
+    }
+    if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
+  </script>
+</body>
+</html>

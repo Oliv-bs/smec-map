@@ -3,66 +3,56 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Sant Martí — Mapa</title>
+  <title>Sant Marti - Mapa</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <style>
     html, body, #map { margin: 0; padding: 0; height: 100%; width: 100%; }
-    .pin {
-      background: #E8734A;
-      width: 28px; height: 28px;
-      border-radius: 50% 50% 50% 0;
-      transform: rotate(-45deg);
-      border: 2px solid white;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    .pin { background: #E8734A; width: 28px; height: 28px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+    .loading { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.95); padding: 8px 14px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000; font-size: 13px; }
+    .err { background: #fdecea; color: #b71c1c; }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div id="status" class="loading">Carregant comercos...</div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script>
-    const params = new URLSearchParams(window.location.search);
-    const parseList = (k) => (params.get(k) || '').split('|').filter(Boolean);
+    const SUPABASE_URL = 'https://vcbzvdpjgpmkzsqwewyt.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjYnp2ZHBqZ3Bta3pzcXdld3l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5NTQ3MzQsImV4cCI6MjA4NzUzMDczNH0.GIR6tHpCwWXpcbqvybOeQ2DKPUuTZVwkgUAI_zjhpH4';
 
-    const ids       = parseList('ids');
-    const names     = parseList('names');
-    const addresses = parseList('addresses');
-    const lats      = parseList('lats').map(Number);
-    const lngs      = parseList('lngs').map(Number);
+    const map = L.map('map').setView([41.4066, 2.1993], 14);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'OSM', maxZoom: 19 }).addTo(map);
+    const pinIcon = L.divIcon({ className: '', html: '<div class="pin"></div>', iconSize: [28, 28], iconAnchor: [14, 28] });
+    const status = document.getElementById('status');
+    const cluster = L.markerClusterGroup({ maxClusterRadius: 40 });
 
-    const center = [41.4066, 2.1993];
-    const map = L.map('map').setView(center, 15);
-
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap',
-      maxZoom: 19
-    }).addTo(map);
-
-    const pinIcon = L.divIcon({
-      className: '',
-      html: '<div class="pin"></div>',
-      iconSize: [28, 28],
-      iconAnchor: [14, 28]
-    });
-
-    const bounds = [];
-    for (let i = 0; i < lats.length; i++) {
-      if (isNaN(lats[i]) || isNaN(lngs[i])) continue;
-      const m = L.marker([lats[i], lngs[i]], { icon: pinIcon }).addTo(map);
-      const name = names[i] || '';
-      const addr = addresses[i] || '';
-      const id   = ids[i]   || '';
-      m.bindPopup(`<b>${name}</b><br>${addr}`);
-      m.on('click', () => {
-        if (window.flutter_inappwebview) {
-          window.flutter_inappwebview.callHandler('onMarkerTap', id);
-        } else if (window.FlutterChannel) {
-          window.FlutterChannel.postMessage(id);
-        }
+    fetch(SUPABASE_URL + '/rest/v1/businesses?select=id,name,address,lat,lng&is_active=eq.true&lat=not.is.null&lng=not.is.null', {
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY }
+    })
+    .then(r => r.json())
+    .then(data => {
+      const bounds = [];
+      data.forEach(b => {
+        if (b.lat == null || b.lng == null) return;
+        const m = L.marker([b.lat, b.lng], { icon: pinIcon });
+        const safe = (s) => (s || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        m.bindPopup('<b>' + safe(b.name) + '</b><br>' + safe(b.address));
+        m.on('click', () => { if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onMarkerTap', b.id); });
+        cluster.addLayer(m);
+        bounds.push([b.lat, b.lng]);
       });
-      bounds.push([lats[i], lngs[i]]);
-    }
-    if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
+      map.addLayer(cluster);
+      if (bounds.length > 0) map.fitBounds(bounds, { padding: [30, 30] });
+      status.remove();
+    })
+    .catch(err => {
+      status.className = 'loading err';
+      status.textContent = 'Error: ' + err.message;
+    });
   </script>
 </body>
 </html>

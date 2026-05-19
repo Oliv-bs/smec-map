@@ -3,48 +3,79 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Sant Marti - Mapa</title>
+  <title>Sant Martí - Mapa</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <style>
     html, body, #map { margin: 0; padding: 0; height: 100%; width: 100%; }
-    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-    .pin { background: #E8734A; width: 28px; height: 28px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
-    .loading { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.95); padding: 8px 14px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000; font-size: 13px; }
+    .loading { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.95); padding: 8px 14px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000; font-size: 13px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
     .err { background: #fdecea; color: #b71c1c; }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div id="status" class="loading">Carregant comercos...</div>
+  <div id="status" class="loading">Carregant comerços...</div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script>
     const SUPABASE_URL = 'https://vcbzvdpjgpmkzsqwewyt.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjYnp2ZHBqZ3Bta3pzcXdld3l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5NTQ3MzQsImV4cCI6MjA4NzUzMDczNH0.GIR6tHpCwWXpcbqvybOeQ2DKPUuTZVwkgUAI_zjhpH4';
 
-    const map = L.map('map').setView([41.4066, 2.1993], 14);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'OSM', maxZoom: 19 }).addTo(map);
-    const pinIcon = L.divIcon({ className: '', html: '<div class="pin"></div>', iconSize: [28, 28], iconAnchor: [14, 28] });
-    const status = document.getElementById('status');
-    const cluster = L.markerClusterGroup({ maxClusterRadius: 40 });
+    // Una icona i color per grup de categoria
+    const GROUP_STYLES = {
+      'alimentacio':                        { bg: '#E67E22', icon: 'fa-basket-shopping' },
+      'equipament-i-serveis-per-a-la-llar': { bg: '#6D4C41', icon: 'fa-house-chimney' },
+      'equipament-i-serveis-personals':     { bg: '#7B1FA2', icon: 'fa-shirt' },
+      'restauracio-oci-i-espectacles':      { bg: '#C62828', icon: 'fa-utensils' },
+      'salut':                              { bg: '#2E7D32', icon: 'fa-heart-pulse' },
+      'serveis':                            { bg: '#1565C0', icon: 'fa-screwdriver-wrench' },
+      'serveis-professionals':              { bg: '#37474F', icon: 'fa-briefcase' },
+    };
+    const DEFAULT_STYLE = { bg: '#E8734A', icon: 'fa-store' };
 
-    fetch(SUPABASE_URL + '/rest/v1/businesses?select=id,name,address,lat,lng&is_active=eq.true&lat=not.is.null&lng=not.is.null', {
+    function makePinIcon(groupSlug) {
+      const s = GROUP_STYLES[groupSlug] || DEFAULT_STYLE;
+      const html = `
+        <div style="width:34px;height:44px;display:flex;flex-direction:column;align-items:center;">
+          <div style="background:${s.bg};width:32px;height:32px;border-radius:50%;border:2.5px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;">
+            <i class="fa-solid ${s.icon}" style="color:white;font-size:13px;"></i>
+          </div>
+          <div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:13px solid ${s.bg};margin-top:-2px;"></div>
+        </div>`;
+      return L.divIcon({ className: '', html, iconSize: [34, 44], iconAnchor: [17, 44], popupAnchor: [0, -48] });
+    }
+
+    const map = L.map('map').setView([41.4066, 2.1993], 14);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 19
+    }).addTo(map);
+
+    const cluster = L.markerClusterGroup({ maxClusterRadius: 40 });
+    const status = document.getElementById('status');
+
+    fetch(`${SUPABASE_URL}/rest/v1/view_directory?select=id,name,address,lat,lng,category_group_slug&lat=not.is.null&lng=not.is.null`, {
       headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY }
     })
     .then(r => r.json())
     .then(data => {
       const bounds = [];
+      const safe = s => (s || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+
       data.forEach(b => {
         if (b.lat == null || b.lng == null) return;
-        const m = L.marker([b.lat, b.lng], { icon: pinIcon });
-        const safe = (s) => (s || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-        m.bindPopup('<b>' + safe(b.name) + '</b><br>' + safe(b.address));
-        m.on('click', () => { if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onMarkerTap', b.id); });
+        const icon = makePinIcon(b.category_group_slug);
+        const m = L.marker([b.lat, b.lng], { icon });
+        m.bindPopup(`<b>${safe(b.name)}</b><br>${safe(b.address)}`);
+        m.on('click', () => {
+          if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onMarkerTap', b.id);
+        });
         cluster.addLayer(m);
         bounds.push([b.lat, b.lng]);
       });
+
       map.addLayer(cluster);
       if (bounds.length > 0) map.fitBounds(bounds, { padding: [30, 30] });
       status.remove();

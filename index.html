@@ -47,6 +47,19 @@
       return L.divIcon({ className: '', html, iconSize: [34, 44], iconAnchor: [17, 44], popupAnchor: [0, -48] });
     }
 
+    // Marcador "ets aquí" (ubicació de l'usuari) — punt blau estil Google.
+    function makeUserIcon() {
+      const html = `
+        <div style="width:18px;height:18px;border-radius:50%;background:#1a73e8;
+                    border:3px solid white;
+                    box-shadow:0 0 0 4px rgba(26,115,232,0.30),0 2px 6px rgba(0,0,0,0.4);"></div>`;
+      return L.divIcon({ className: '', html, iconSize: [18, 18], iconAnchor: [9, 9], popupAnchor: [0, -12] });
+    }
+    const mapParams = new URLSearchParams(window.location.search);
+    const uLat = parseFloat(mapParams.get('ulat'));
+    const uLng = parseFloat(mapParams.get('ulng'));
+    const hasUser = !isNaN(uLat) && !isNaN(uLng);
+
     const map = L.map('map').setView([41.4066, 2.1993], 14);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap',
@@ -77,6 +90,14 @@
       });
 
       map.addLayer(cluster);
+
+      // Marcador de l'usuari (si l'app passa la seva ubicació) + incloure'l a l'enquadrament.
+      if (hasUser) {
+        L.marker([uLat, uLng], { icon: makeUserIcon(), zIndexOffset: 1000 })
+          .addTo(map).bindPopup('Ets aquí');
+        bounds.push([uLat, uLng]);
+      }
+
       if (bounds.length > 0) map.fitBounds(bounds, { padding: [30, 30] });
       status.remove();
     })

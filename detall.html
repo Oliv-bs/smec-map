@@ -37,19 +37,40 @@
       return L.divIcon({ className: '', html, iconSize: [34, 44], iconAnchor: [17, 44], popupAnchor: [0, -48] });
     }
 
+    // Marcador "ets aquí" (ubicació de l'usuari) — punt blau estil Google.
+    function makeUserIcon() {
+      const html = `
+        <div style="width:18px;height:18px;border-radius:50%;background:#1a73e8;
+                    border:3px solid white;
+                    box-shadow:0 0 0 4px rgba(26,115,232,0.30),0 2px 6px rgba(0,0,0,0.4);"></div>`;
+      return L.divIcon({ className: '', html, iconSize: [18, 18], iconAnchor: [9, 9], popupAnchor: [0, -12] });
+    }
+
     const params = new URLSearchParams(window.location.search);
     const lat = parseFloat(params.get('lat') || '41.4066');
     const lng = parseFloat(params.get('lng') || '2.1993');
     const cat = params.get('cat') || '';
+    const ulat = parseFloat(params.get('ulat'));
+    const ulng = parseFloat(params.get('ulng'));
+    const hasUser = !isNaN(ulat) && !isNaN(ulng);
 
-    const map = L.map('map', { zoomControl: true, attributionControl: true })
-                 .setView([lat, lng], 16);
+    const map = L.map('map', { zoomControl: true, attributionControl: true });
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap',
       maxZoom: 19
     }).addTo(map);
 
-    L.marker([lat, lng], { icon: makePinIcon(cat) }).addTo(map);
+    // Marcador del comerç.
+    L.marker([lat, lng], { icon: makePinIcon(cat) }).addTo(map).bindPopup('Comerç');
+
+    if (hasUser) {
+      // Marcador de l'usuari + enquadrar tots dos amb una mica de marge.
+      L.marker([ulat, ulng], { icon: makeUserIcon() }).addTo(map).bindPopup('Ets aquí');
+      const bounds = L.latLngBounds([[lat, lng], [ulat, ulng]]);
+      map.fitBounds(bounds, { padding: [55, 55], maxZoom: 16 });
+    } else {
+      map.setView([lat, lng], 16);
+    }
   </script>
 </body>
 </html>

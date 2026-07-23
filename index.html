@@ -69,14 +69,23 @@
     const cluster = L.markerClusterGroup({ maxClusterRadius: 40 });
     const status = document.getElementById('status');
 
+    // Normalització insensible a accents/majúscules (per al cercador).
+    function norm(s) {
+      return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+    // Stub: si l'app crida applyFilter abans que carreguin les dades, guardem la
+    // consulta pendent i l'apliquem quan estiguin llestes.
+    window._pendingFilter = '';
+    window.applyFilter = function (q) { window._pendingFilter = q || ''; };
+
     fetch(`${SUPABASE_URL}/rest/v1/view_directory?select=id,name,address,lat,lng,category_group_slug&lat=not.is.null&lng=not.is.null`, {
       headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY }
     })
     .then(r => r.json())
     .then(data => {
-      const bounds = [];
       const safe = s => (s || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
 
+      const allMarkers = [];
       data.forEach(b => {
         if (b.lat == null || b.lng == null) return;
         const icon = makePinIcon(b.category_group_slug);
@@ -85,20 +94,37 @@
         m.on('click', () => {
           if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onMarkerTap', b.id);
         });
-        cluster.addLayer(m);
-        bounds.push([b.lat, b.lng]);
+        allMarkers.push({ marker: m, norm: norm(b.name), lat: b.lat, lng: b.lng });
       });
 
       map.addLayer(cluster);
 
-      // Marcador de l'usuari (si l'app passa la seva ubicació) + incloure'l a l'enquadrament.
+      // Marcador de l'usuari (si l'app passa la seva ubicació). Es manté sempre;
+      // NO és al clúster, així que el filtre no l'afecta.
       if (hasUser) {
         L.marker([uLat, uLng], { icon: makeUserIcon(), zIndexOffset: 1000 })
           .addTo(map).bindPopup('Ets aquí');
-        bounds.push([uLat, uLng]);
       }
 
-      if (bounds.length > 0) map.fitBounds(bounds, { padding: [30, 30] });
+      // Filtre real: mostra només els comerços que coincideixen amb la cerca i
+      // enquadra-hi. Buit = tots. Es pot cridar des de l'app amb runJavaScript.
+      window.applyFilter = function (q) {
+        const query = norm(q).trim();
+        cluster.clearLayers();
+        const bounds = [];
+        allMarkers.forEach(it => {
+          if (!query || it.norm.includes(query)) {
+            cluster.addLayer(it.marker);
+            bounds.push([it.lat, it.lng]);
+          }
+        });
+        // Amb cerca activa enquadrem als resultats; sense cerca hi afegim l'usuari.
+        if (hasUser && !query) bounds.push([uLat, uLng]);
+        if (bounds.length > 0) {
+          map.fitBounds(bounds, { padding: [30, 30], maxZoom: 17 });
+        }
+      };
+      window.applyFilter(window._pendingFilter);  // aplica pendent o mostra tots
       status.remove();
     })
     .catch(err => {

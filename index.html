@@ -90,10 +90,13 @@
         if (b.lat == null || b.lng == null) return;
         const icon = makePinIcon(b.category_group_slug);
         const m = L.marker([b.lat, b.lng], { icon });
-        m.bindPopup(`<b>${safe(b.name)}</b><br>${safe(b.address)}`);
-        m.on('click', () => {
-          if (window.flutter_inappwebview) window.flutter_inappwebview.callHandler('onMarkerTap', b.id);
-        });
+        const dir = `https://www.google.com/maps/dir/?api=1&destination=${b.lat},${b.lng}`;
+        m.bindPopup(
+          `<b>${safe(b.name)}</b><br>${safe(b.address)}` +
+          `<br><a href="${dir}" style="display:inline-block;margin-top:8px;` +
+          `padding:6px 12px;background:#E8734A;color:#fff;border-radius:8px;` +
+          `text-decoration:none;font-size:13px;font-weight:600;">➤ Com arribar</a>`
+        );
         allMarkers.push({ marker: m, norm: norm(b.name), lat: b.lat, lng: b.lng });
       });
 

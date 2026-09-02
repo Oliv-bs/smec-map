@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Sant Martí - Mapa</title>
+  <!-- Generic a proposit: aquesta mateixa pagina serveix l'eix que digui
+       app_config.public_map_tenant_slug, no nomes Sant Marti. -->
+  <title>Mapa de comerços</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
@@ -78,7 +80,10 @@
     window._pendingFilter = '';
     window.applyFilter = function (q) { window._pendingFilter = q || ''; };
 
-    fetch(`${SUPABASE_URL}/rest/v1/view_directory?select=id,name,address,lat,lng,category_group_slug&lat=not.is.null&lng=not.is.null`, {
+    // view_map_public, no view_directory: aquesta pàgina és pública i la clau
+    // anon és visible en aquest mateix repo, així que la vista només exposa el
+    // que es dibuixa al mapa. Els telèfons i els mòbils dels comerços no hi són.
+    fetch(`${SUPABASE_URL}/rest/v1/view_map_public?select=id,name,address,lat,lng,category_group_slug`, {
       headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY }
     })
     .then(r => r.json())
